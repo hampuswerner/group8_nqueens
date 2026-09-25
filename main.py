@@ -28,28 +28,37 @@ def create_population(population_size, n):
     - use create_child and append to new population
     - Return new population
 """
-def selection(population, max_fitness):
+def selection(population, max_fitness, replacement_rate):
     population_fitness_list = []
 
     for p in population:
         population_fitness_list.append(calculate_fitness(p, max_fitness))
 
-    """"indices = [i for i in range(len(population_fitness_list)) if i != excluded]
-    weights = [fitness_values[i] for i in indices]
+    indices = [i for i in range(len(population_fitness_list)) if i != None]
+    weights = [population_fitness_list[i] for i in indices]
+
+    new_population = []
+    # (1 - r)p
+    new_population_length = int((1 - replacement_rate) * len(population))
 
     if sum(weights) == 0:
-        return random.choice(indices)
+        return [
+            random.choice(population).copy()
+            for _ in range(new_population_length)
+        ]
 
-    return random.choices(indices, weights=weights, k=1)[0]"""
-    return population_fitness_list
+    for i in range(new_population_length):
+        selected_index = random.choices(indices, weights=weights, k=1)[0]
+        new_population.append(population[selected_index].copy())
+
+    return new_population
     
 
-
-"""
-    
-"""
-def create_child(parent1, parent2):
-    pass
+def crossover(parent_1, parent_2):
+    point = random.randint(1, len(parent_1) - 1)
+    child_1 = parent_1[:point] + parent_2[point:]
+    child_2 = parent_2[:point] + parent_1[point:]
+    return child_1, child_2
 
 
 """
@@ -60,27 +69,90 @@ def calculate_fitness(individual, max_fitness):
     
     for i in range(len(individual)):
         for j in range(i + 1, len(individual)):
-            same_row = individual[i] == individual[j]
+            same_col = individual[i] == individual[j]
             same_diagonal = abs(i - j) == abs(individual[i] - individual[j])
 
-            if same_row or same_diagonal:
+            if same_col or same_diagonal:
                 fitness -= 1
     
     return fitness
 
-def mutate(individual, mutation_rate):
-    pass
+def mutate(individual):
+    position = random.randrange(len(individual))
+    new_value = random.randrange(len(individual))
+
+    while new_value == individual[position]:
+        new_value = random.randrange(len(individual))
+
+    individual[position] = new_value
 
 def calculate_max_fitness(n):
-    return ((n * (n - 1)) / 2)
+    return ((n * (n - 1)) // 2)
+
+def current_best_fitness(population, max_fitness):
+    current_best_fitness = 0
+    for individual in population:
+        fitness = calculate_fitness(individual, max_fitness)
+        if fitness > current_best_fitness:
+            current_best_fitness = fitness
+
+    return current_best_fitness
+
+def find_optimal_solution(population, n):
+    max_fitness = calculate_max_fitness(n)
+    for individual in population:
+        if calculate_fitness(individual, max_fitness) == max_fitness:
+            return individual
+
+    return None
+
 
 def main():
-    n = 4
-    population_size = 3
-    population = create_population(population_size, n)
-    print("Population: ", population)
-    selection_list = selection(population, calculate_max_fitness(n))
-    print("Selection: ", selection(population, calculate_max_fitness(n)))
+    n = [4, 8, 12, 16, 20] # Board size
+    population_size = 100
+    mutation_rate = 0.2
+    r = 0.5 # Replacement rate
+        
+    for i in range(0, len(n)):
+        curr_n = n[i]
+        max_fitness = calculate_max_fitness(curr_n)
+        population = create_population(population_size, curr_n)
+        best_fitness = current_best_fitness(population, max_fitness)
+        fitness_threshold = calculate_max_fitness(curr_n)
+
+        generation = 0
+        max_generation = 10000
+
+        while (best_fitness < fitness_threshold) and generation < max_generation:
+            generation += 1
+
+            new_population = selection(population, max_fitness, r)
+
+            parent_pairs = int((r * population_size) / 2)
+            for i in range(parent_pairs):
+                parent1, parent2 = random.sample(new_population, 2)
+                child1, child2 = crossover(parent1, parent2)
+                new_population.append(child1)
+                new_population.append(child2)
+
+            mutation_amount = int(mutation_rate * len(new_population))
+            for i in range(mutation_amount):
+                mutate(random.choice(new_population))
+
+            population = new_population
+
+            best_fitness = current_best_fitness(population, max_fitness)
+
+
+        solution = find_optimal_solution(population, curr_n)
+        if solution is not None:
+            print(f"Optimal solution: {solution} for N = {curr_n}")
+        else:
+            print(f"Didnt find optimal solution for N = {curr_n} in {generation} generations")
+
+
+    print("The end")
+            
 
 
 

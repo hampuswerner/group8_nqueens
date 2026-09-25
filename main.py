@@ -1,4 +1,33 @@
 import random
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def generate_table(dataframe):
+    _, ax = plt.subplots(figsize=(12, 4))
+
+    ax.axis("off")
+
+    table = ax.table(
+        cellText=dataframe.values,
+        colLabels=dataframe.columns,
+        loc="center",
+        cellLoc="center"
+    )
+
+    table.auto_set_font_size(False)
+    table.set_fontsize(10)
+    table.scale(1, 1.5)
+
+    table.auto_set_column_width(col=list(range(len(dataframe.columns))))
+
+    plt.savefig(
+        "table.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+
+    plt.close()
+
 
 def create_individual(n):
     individual = []
@@ -108,10 +137,11 @@ def find_optimal_solution(population, n):
 
 
 def main():
-    n = [4, 8, 12, 16, 20] # Board size
-    population_size = 100
+    n = [4, 6, 8, 10, 12] # Board size
+    population_size = 1000
     mutation_rate = 0.2
     r = 0.5 # Replacement rate
+    results = [] # For table
         
     for i in range(0, len(n)):
         curr_n = n[i]
@@ -145,13 +175,28 @@ def main():
 
 
         solution = find_optimal_solution(population, curr_n)
+        results.append({
+            "N": curr_n,
+            "Population Size": population_size,
+            "Mutation Rate": mutation_rate,
+            "Replacement Rate": r,
+            "Generations": generation,
+            "Best Fitness": best_fitness,
+            "Max Fitness": max_fitness,
+            "Success": solution is not None
+        })
+
         if solution is not None:
             print(f"Optimal solution: {solution} for N = {curr_n}")
         else:
-            print(f"Didnt find optimal solution for N = {curr_n} in {generation} generations")
+            print(
+                f"Didn't find optimal solution for N={curr_n} "
+                f"in {generation} generations. "
+                f"Best fitness: {best_fitness}/{max_fitness}"
+            )
 
-
-    print("The end")
+    df = pd.DataFrame(results)
+    generate_table(df)
             
 
 

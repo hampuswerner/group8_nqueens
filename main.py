@@ -1,6 +1,7 @@
 import random
 import pandas as pd
 import matplotlib.pyplot as plt
+import time
 
 def generate_table(dataframe):
     _, ax = plt.subplots(figsize=(12, 4))
@@ -37,18 +38,24 @@ def create_individual(n):
 
     return individual
 
+def create_permutation_individual(n):
+    return random.sample(range(n), n)
+
 
 """
     Use this to make a starter population
     Use create_individual and append to population
 """
-def create_population(population_size, n):
+def create_population(population_size, n, permutation):
     population = []
 
     for i in range(population_size):
-        individual = create_individual(n)
+        if permutation:
+            individual = create_permutation_individual(n)
+        else:
+            individual = create_individual(n)
+        
         population.append(individual)
-
 
     return population
 
@@ -83,11 +90,92 @@ def selection(population, max_fitness, replacement_rate):
     return new_population
     
 
-def crossover(parent_1, parent_2):
-    point = random.randint(1, len(parent_1) - 1)
-    child_1 = parent_1[:point] + parent_2[point:]
-    child_2 = parent_2[:point] + parent_1[point:]
-    return child_1, child_2
+def single_point_crossover(parent1, parent2):
+    point = random.randint(1, len(parent1) - 1)
+    child1 = parent1[:point] + parent2[point:]
+    child2 = parent2[:point] + parent1[point:]
+
+    child1 = repair_permutation(child1)
+    child2 = repair_permutation(child2)
+
+    return child1, child2
+
+def uniform_crossover(parent1, parent2):
+    child1 = []
+    child2 = []
+
+    for i in range(len(parent1)):
+        if random.random() < 0.5:
+            child1.append(parent1[i])
+            child2.append(parent2[i])
+        else:
+            child1.append(parent2[i])
+            child2.append(parent1[i])
+
+    child1 = repair_permutation(child1)
+    child2 = repair_permutation(child2)
+
+    return child1, child2
+
+def partially_mapped_crossover(parent1, parent2):
+    point1, point2 = sorted(random.sample(range(len(parent1)), 2))
+
+    child1 = [None] * len(parent1)
+    child2 = [None] * len(parent2)
+
+    child1[point1:point2] = parent1[point1:point2]
+    child2[point1:point2] = parent2[point1:point2]
+
+    for i in range(len(parent1)):
+        if point1 <= i < point2:
+            continue
+
+        value = parent2[i]
+
+        while value in child1[point1:point2]:
+            index = parent1.index(value)
+            value = parent2[index]
+
+        child1[i] = value
+
+    for i in range(len(parent2)):
+        if point1 <= i < point2:
+            continue
+
+        value = parent1[i]
+
+        while value in child2[point1:point2]:
+            index = parent2.index(value)
+            value = parent1[index]
+        
+        child2[i] = value
+
+    return child1, child2
+
+def order_crossover(parent1, parent2):
+    point1, point2 = sorted(random.sample(range(len(parent1)), 2))
+
+    child1 = [None] * len(parent1)
+    child2 = [None] * len(parent2)
+
+    child1[point1:point2] = parent1[point1:point2]
+    child2[point1:point2] = parent2[point1:point2]
+
+    order1 = parent2[point2:] + parent2[:point2]
+    order2 = parent1[point2:] + parent1[:point2]
+
+    # Remove values that is already in the children
+    remaining1 = [value for value in order1 if value not in child1]
+    remaining2 = [value for value in order2 if value not in child2]
+
+    positions = list(range(point2, len(parent2))) + list(range(0, point1))
+
+    for i, position in enumerate(positions):
+        child1[position] = remaining1[i]
+        child2[position] = remaining2[i]
+
+    return child1, child2
+
 
 
 """
@@ -106,14 +194,22 @@ def calculate_fitness(individual, max_fitness):
     
     return fitness
 
-def mutate(individual):
-    position = random.randrange(len(individual))
-    new_value = random.randrange(len(individual))
+def mutate(individual, permutation):
 
-    while new_value == individual[position]:
+    if permutation:
+        position1, position2 = random.sample(range(len(individual)), 2)
+        
+        individual[position1], individual[position2] = (individual[position2], individual[position1])
+    else:
+        position = random.randrange(len(individual))
         new_value = random.randrange(len(individual))
 
-    individual[position] = new_value
+        while new_value == individual[position]:
+            new_value = random.randrange(len(individual))
+
+        individual[position] = new_value
+
+        
 
 def calculate_max_fitness(n):
     return ((n * (n - 1)) // 2)
@@ -135,65 +231,124 @@ def find_optimal_solution(population, n):
 
     return None
 
+def repair_permutation(individual):
+    missing = []
+
+    for value in range(len(individual)):
+        if value not in individual:
+            missing.append(value)
+
+    seen = set()
+    duplicate_positions = []
+
+    for i in range(len(individual)):
+        if individual[i] in seen:
+            duplicate_positions.append(i)
+        else:
+            seen.add(individual[i])
+
+    for i in range(len(duplicate_positions)):
+        position = duplicate_positions[i]
+        individual[position] = missing[i]
+
+    return individual
+
 
 def main():
-    n = [4, 6, 8, 10, 12] # Board size
-    population_size = 1000
+    n = [30] # Board size
+    population_size = 300
     mutation_rate = 0.2
     r = 0.5 # Replacement rate
     results = [] # For table
+    permutation = True
+    max_generation = 10000
+    runs = 1
         
-    for i in range(0, len(n)):
-        curr_n = n[i]
+    for curr_n in n:
+        
         max_fitness = calculate_max_fitness(curr_n)
-        population = create_population(population_size, curr_n)
-        best_fitness = current_best_fitness(population, max_fitness)
-        fitness_threshold = calculate_max_fitness(curr_n)
+        successful_generation_results = []
+        time_results = []
+        generation_results = []
+        fitness_results = []
+        successes = 0
 
-        generation = 0
-        max_generation = 10000
-
-        while (best_fitness < fitness_threshold) and generation < max_generation:
-            generation += 1
-
-            new_population = selection(population, max_fitness, r)
-
-            parent_pairs = int((r * population_size) / 2)
-            for i in range(parent_pairs):
-                parent1, parent2 = random.sample(new_population, 2)
-                child1, child2 = crossover(parent1, parent2)
-                new_population.append(child1)
-                new_population.append(child2)
-
-            mutation_amount = int(mutation_rate * len(new_population))
-            for i in range(mutation_amount):
-                mutate(random.choice(new_population))
-
-            population = new_population
-
+        for run in range(runs):
+            random.seed(run)
+            start_time = time.perf_counter()
+            population = create_population(population_size, curr_n, permutation)
             best_fitness = current_best_fitness(population, max_fitness)
+            generation = 0
 
+            while best_fitness < max_fitness and generation < max_generation:
+                generation += 1
 
-        solution = find_optimal_solution(population, curr_n)
+                new_population = selection(population, max_fitness, r)
+
+                parent_pairs = int((r * population_size) / 2)
+                for _ in range(parent_pairs):
+                    parent1, parent2 = random.sample(new_population, 2)
+                    child1, child2 = single_point_crossover(parent1, parent2)
+                    assert sorted(child1) == list(range(curr_n))
+                    assert sorted(child2) == list(range(curr_n))
+                    new_population.append(child1)
+                    new_population.append(child2)
+
+                mutation_amount = int(mutation_rate * len(new_population))
+                for _ in range(mutation_amount):
+                    mutate(random.choice(new_population), permutation)
+
+                population = new_population
+
+                best_fitness = current_best_fitness(population, max_fitness)
+
+            end_time = time.perf_counter()
+            execution_time = end_time - start_time
+
+            solution = find_optimal_solution(population, curr_n)
+
+            generation_results.append(generation)
+            time_results.append(execution_time)
+            fitness_results.append(best_fitness)
+
+            if solution is not None:
+                successes += 1
+                successful_generation_results.append(generation)
+            
+            print(
+                f"N={curr_n} | "
+                f"Run {run + 1}/{runs} | "
+                f"Generations={generation} | "
+                f"Best fitness={best_fitness}/{max_fitness} | "
+                f"Success={solution is not None}"
+            )
+
+        average_generations = (sum(generation_results) / len(generation_results))
+        average_time = (sum(time_results) / len(time_results))
+        average_fitness = (sum(fitness_results) / len(fitness_results))
+        success_rate = (successes / runs) * 100
+
+        if successful_generation_results:
+            average_successful_generations = (sum(successful_generation_results) / len(successful_generation_results))
+        else:
+            average_successful_generations = None
+
         results.append({
             "N": curr_n,
+            "Runs": runs,
             "Population Size": population_size,
             "Mutation Rate": mutation_rate,
             "Replacement Rate": r,
-            "Generations": generation,
-            "Best Fitness": best_fitness,
+            "Avg Generations": round(average_generations, 2),
+            "Avg Successful Generations":
+                round(average_successful_generations, 2)
+                if average_successful_generations is not None
+                else "N/A",
+            "Avg Time (s)": round(average_time, 3),
+            "Avg Best Fitness": round(average_fitness, 2),
             "Max Fitness": max_fitness,
-            "Success": solution is not None
+            "Success Rate (%)": round(success_rate, 1)
         })
-
-        if solution is not None:
-            print(f"Optimal solution: {solution} for N = {curr_n}")
-        else:
-            print(
-                f"Didn't find optimal solution for N={curr_n} "
-                f"in {generation} generations. "
-                f"Best fitness: {best_fitness}/{max_fitness}"
-            )
 
     df = pd.DataFrame(results)
     generate_table(df)

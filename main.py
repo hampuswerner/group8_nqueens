@@ -255,14 +255,14 @@ def repair_permutation(individual):
 
 
 def main():
-    n = [30] # Board size
+    n = [8, 10, 12, 14, 16, 18, 20] # Number of queens / Board size
     population_size = 300
     mutation_rate = 0.2
-    r = 0.5 # Replacement rate
+    r = 0.4 # Replacement rate
     results = [] # For table
     permutation = True
-    max_generation = 10000
-    runs = 1
+    max_generation = 30000
+    runs = 30
         
     for curr_n in n:
         
